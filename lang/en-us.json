@@ -1,0 +1,23 @@
+{
+	"main.search":"Search",
+	"main.tools":"Tools",
+	"main.win":"Windosw",
+	"main.launch":"Launch",
+	"main.settings":"settings",
+	
+	"main.day0":"Sun",
+	"main.day1":"Mon",
+	"main.day2":"Tue",
+	"main.day3":"Wed",
+	"main.day4":"Thur",
+	"main.day5":"Fri",
+	"main.day6":"Sat",
+	
+	"search.title":"Search",
+	
+	"tools.title":"Tools",
+	
+	"launch.title":"Apps",
+	
+	"settings.title":"Settings"
+}

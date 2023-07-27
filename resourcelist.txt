@@ -1,0 +1,19 @@
+The versions between 0.0.1-2 ~ INF
+
+Charmsbar Images 84x84
+win.png
+search.png
+tools.png
+launch.png
+settings.png
+
+Tools bar Images (not used in standard resource pack) 32x32
+shot.png
+clipman.png
+note.png
+clock.png
+filetmp.png
+mkcolor.png
+numcovert.png
+
+Some more...

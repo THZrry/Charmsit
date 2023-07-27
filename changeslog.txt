@@ -1,0 +1,5 @@
+0.0.1.0 the name of unamed old versions
+0.0.1.1 mostly completed the basic "launch" bar.
+ -3 the last version only using line-animation
+ -4 added 5 non-lined animations
+ -5 modified the width;now, wheel will not move invisible frames

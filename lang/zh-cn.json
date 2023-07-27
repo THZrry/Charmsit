@@ -1,0 +1,33 @@
+{
+	"main.search":"搜索",
+	"main.tools":"工具",
+	"main.win":"Win",
+	"main.launch":"启动",
+	"main.settings":"设置",
+	
+	"main.day0":"星期天",
+	"main.day1":"星期一",
+	"main.day2":"星期二",
+	"main.day3":"星期三",
+	"main.day4":"星期四",
+	"main.day5":"星期五",
+	"main.day6":"星期六",
+	
+	"search.title":"搜索",
+	
+	"tools.title":"工具",
+	"tools.shot":"截图",
+	"tools.clipman":"管理剪贴板",
+	"tools.title":"工具",
+	"tools.note":"便利贴",
+	"tools.title":"工具",
+	"tools.clock":"计时",
+	"tools.filetmp":"文件寄存",
+	"tools.mkcolor":"快捷取色",
+	"tools.numcovert":"数字转换",
+	
+	"launch.title":"应用",
+	
+	"settings.title":"设置",
+	"settings.exit":"退出CharmsIt"
+}
