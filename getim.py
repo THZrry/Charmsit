@@ -1,7 +1,10 @@
 import zipfile
+import json
 from PIL import Image, ImageTk
-zarchive = zipfile.ZipFile("resource.zip")
+
+#zarchive = zipfile.ZipFile("resource.zip")
 cache = {}
+
 def get(path):
     tkim = cache.get(path)
     if tkim:
@@ -16,6 +19,10 @@ def get(path):
     return tkim
 
 def changeres(path):
-    global zarchive
+    global zarchive, colordic
     zarchive = zipfile.ZipFile(path)
     cache.clear()
+    with zarchive.open("colors.json",'r') as f:
+        colordic = json.loads(f.read())
+
+changeres("resource.zip")

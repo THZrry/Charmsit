@@ -6,7 +6,7 @@ through tkinter is not good at making gui with animation and handling touching
 events, i made it more useful.
 it's smooth, perhaps because tkinter is light..
 """
-VERSION = "0.0.1.1-7"
+VERSION = "0.0.1.1-8"
 import tkinter as tk
 import time
 import json
@@ -81,16 +81,20 @@ def animate5(start,end,duration,passed):
 def animate6(start,end,duration,passed):
     x = passed / duration
     return start+(end-start)*(math.sin(x*3.14/2))
+def animate7(start,end,duration,passed):
+    x = passed / duration
+    return start+(end-start)*(1-(1-x)**5)
 def _animate(start,end,duration,passed):
     x = passed / duration
     #return start+(end-start)*(x**3 - 0.3*x*math.sin(x*3.14))
     return start+(end-start)*(3*math.sin(x-5.7)-2)
     #return start+(end-start)*(math.sqrt(x**4))
     #return start+(end-start)*(math.sin(x*3.14/2))
-animate = animate3
+animate = animate2
 def color(name):
     #return {"bg-normal":"#6400E6","bg-entered":"black","bg-pressed":"grey"}.get(name)
-    return {"bg-normal":"black","bg-entered":"grey","bg-pressed":"lightgrey","fg-normal":"white"}.get(name)
+    #return {"bg-normal":"black","bg-entered":"grey","bg-pressed":"lightgrey","fg-normal":"white"}.get(name)
+    return colordic.get(name)
 FONT = ""
 
 def lang(key,default=None):
@@ -164,7 +168,7 @@ class AnimateManager:
             widget.animate = 0
             self.during(self.end)
             self.after()
-            #print(self.framesnum/self.duration,file=open("testfps.txt",'r+'))
+            #print(self.framesnum/self.duration,file=open("testfps.txt",'w+'))
             return
         self.framesnum += 1
         var = self.func(self.start,self.end,self.duration,passed,*self.func_extra)
@@ -196,7 +200,7 @@ class AnimateManager:
                 widget.animate = 0
                 during(end)
                 self.after()
-                print(self.framesnum/passed,file=open("testfps.txt",'r+'))
+                #print(self.framesnum/passed,file=open("testfps.txt",'w+'))
                 return
             self.framesnum += 1
             var = func(start,end,duration,passed,*func_extra)
@@ -230,7 +234,7 @@ class AnimateManager:
                     widget.animate = 0
                     during(end)
                     am.after()
-                    print(am.framesnum/passed,file=open("testfps.txt",'r+'))
+                    print(am.framesnum/passed,file=open("testfps.txt",'w+'))
                     return
                 am.framesnum += 1
                 var = func(start,end,duration,passed,*func_extra)
@@ -363,7 +367,7 @@ class Charmspop(tk.Toplevel):
 class Charmspopframe(tk.Frame):
     def __init__(self,master=None,*a,**b):
         super().__init__(master,*a,**b)
-        bg = color("bg-normal")
+        bg = color("bg-charms")
         fg = color("fg-normal")
         self["bg"] = bg
         self.btnwin = Button(self,text=lang("main.win"),font="Simhei 20",fg=fg,compound='top',image=getim.get("win.png"),command=lambda:time.sleep(0.1) or pynput.keyboard.Controller().press(pynput.keyboard.Key.cmd) or pynput.keyboard.Controller().release(pynput.keyboard.Key.cmd) or self.master.disappear())
@@ -679,7 +683,6 @@ class Toolsframe(tk.Frame):
         self.frame.place(x=40,y=100,width=self.lw,height=self.winfo_screenheight()-140)
         btnframe = self.btnframe = tk.Frame(self.frame,bg=color("bg-normal"),)
         btnframe.place(x=0,y=0,width=self.lw,height=self.winfo_screenheight()-140)
-        #btnframe.bind_all("<>")
         btnframe.bind_all("<MouseWheel>",self._mwh,1)
         btnframe.bind_all("<Button-4>",self._mwhup,1)
         btnframe.bind_all("<Button-5>",self._mwhdn,1)
@@ -690,7 +693,7 @@ class Toolsframe(tk.Frame):
 
         idx = 0
         no = lambda:None
-        lst = (("tools.shot","shot.png",no),("tools.clipman","clipman.png",no),("tools.note","note.png",no),("tools.clock","clock.png",no),("tools.filetmp","filetmp.png",no),("tools.mkcolor","mkcolor.png",no),("tools.numcovert","numcovert.png",no))
+        lst = (("tools.shot","shot.png",no),("tools.clipman","clipman.png",no),("tools.note","note.png",self.note),("tools.clock","clock.png",no),("tools.filetmp","filetmp.png",no),("tools.mkcolor","mkcolor.png",no),("tools.numcovert","numcovert.png",no))
         for langkey, img, command in lst:
             btn = Button(self.btnframe,text=lang(langkey),image=getim.get(img),compound="left",font="Simhei 32",anchor='w',padx=20)
             btn._command = command
@@ -699,6 +702,7 @@ class Toolsframe(tk.Frame):
             btn.stop = lambda:None
             self.btns.append(btn)
             idx += 1
+        self.fnote = Noteframe(self.master)
         
     def _mwhup(self,e):
         if showing != self.master:
@@ -740,10 +744,8 @@ class Toolsframe(tk.Frame):
         btnframe.place(y=int(info["y"])-delta*10,height=len(self.btns)*80)
         info = btnframe.place_info()
         if int(info["y"]) > 0:
-            #self.stopanimate()
             self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),0)
         elif int(info["y"]) < 140-self.winfo_screenheight():
-            #self.stopanimate()
             self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),140-self.winfo_screenheight())
 
     def _b1p(self,e):
@@ -790,8 +792,64 @@ class Toolsframe(tk.Frame):
             btn.stop()
             btn.stop = place_animate(btn,0.2 if t else 0.4,self.lw,0,btn.y,btn.y,t,wait*30,kw={"width":self.lw,"height":80})
             wait += 1
+    def _chang2e(self,t=False):
+        place_animate(self.back,0.6,20+self.master.width,20,20,20,t)
+        place_animate(self.titlel,0.7,80+self.master.width,80,20,20,t)
+        wait = 1
+        for btn in reversed(self.btns):
+            #btn.place_forget()
+            btn.stop()
+            btn.stop = place_animate(btn,0.2 if t else 0.4,self.lw,0,btn.y,btn.y,t,wait*30,kw={"width":self.lw,"height":80})
+            wait += 1
     def takeshot(self):
         pass
+    def note(self):
+        self.fnote.appear()
+
+class Subframe(tk.Frame):
+    LANG = "subwin"
+    def __init__(self,master=None,*a,**b):
+        super().__init__(master,*a,**b)
+        self["bg"] = color("bg-normal")
+        self.back = Button(self,text="<-",font="Simhei 24",command=self.disappear)
+        self.back.place(x=20,y=20)
+        self.titlel = tk.Label(self,text=lang(self.LANG),font="Simhei 24",bg=color("bg-normal"),fg=color("fg-normal"))
+        self.titlel.place(x=80,y=20)
+
+    def _appear(self):
+        pass
+
+    def _disappear(self):
+        pass
+
+    def appear(self):
+        frm = self.master.frame
+        frm.disappear()
+        #frm.place_forget()
+        #print(self.master)
+        #print(self.master.winfo_width())
+        #self.place(height=self.master.winfo_height(),x=0,y=0,width=self.master.winfo_width())
+        place_animate(self,0.2,self.master.winfo_width(),0,0,0,wait=100,kw={"width":self.master.winfo_width(),"height":self.winfo_screenheight()})
+        self._appear()
+        #self["bg"] = "black"
+        #tk.Button(self,command=self.disappear,text="<-").place(x=20,y=20,width=40,height=40)
+        place_animate(self.back,0.6,20+self.master.width,20,20,20)
+        place_animate(self.titlel,0.7,80+self.master.width,80,20,20)
+    def disappear(self):
+        frm = self.master.frame
+        #frm.disappear()
+        #frm.place_forget()
+        #print(self.master)
+        #print(self.master.winfo_width())
+        #self.place(height=self.master.winfo_height(),x=0,y=0,width=self.master.winfo_width())
+        place_animate(self,0.2,0,self.master.winfo_width(),0,0,wait=100,kw={"width":self.master.winfo_width(),"height":self.winfo_screenheight()})
+        self._disappear()
+        frm.appear()
+        place_animate(self.back,0.6,20+self.master.width,20,20,20,1)
+        place_animate(self.titlel,0.7,80+self.master.width,80,20,20,1)
+
+class Noteframe(Subframe):
+    LANG = "tools.note"
 
 class Basicwin(tk.Toplevel):
     width = 480
@@ -879,7 +937,6 @@ class Timerframe(tk.Frame):
         self.lwk["text"] = lang("main.day%s"%time.strftime("%w"))
         self.ldy["text"] = time.strftime("%m/%d")
     def updates(self):
-        #print(type(self.master),self.master.master)
         if self.master.master.poped:
             self.lts["text"] = time.strftime(":%S")
             if int(time.strftime("%S")) <= 2:
@@ -927,24 +984,21 @@ def place_animate(wid,t,xs,xe,ys,ye,reverse=False,wait=0,kw=None):
     if reverse:
         am = AnimateManager(wid,t,1,0,lambda:None,during,after,aftertime=wait)
     am.start_animate()
-##    if wait == 0:
-##        am.start_animate()
-##    else:
-##        wid.after(1,am.start_animate)
     return am.stop
 
 if __name__ == "__main__":
     with open("config.json",'r') as f:
         confdic = json.loads(f.read())
-    #confdic["main.fps"] = 30
-    with open("lang/%s.json"%(config("main.language")),'r') as f:
-    #with open("lang/en-us.json",'r') as f:
-        langdic = json.loads(f.read())
+    try:
+        with open("lang/%s.json"%(config("main.language")),'r') as f:
+            langdic = json.loads(f.read())
+    except:
+        langdic = {}
+    colordic = getim.colordic
     ANI_DUR = int(1000 / (config("main.fps",30)or 30)) - 2
     if ANI_DUR <= 0:
         ANI_DUR = 1
     ALLOWANIMATION = bool(config("main.animation",1))
-    #print(ANI_DUR,config("main.fps"))
     root = tk.Tk()
     root.withdraw()
     if config("main.launchscreen",1):
