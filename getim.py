@@ -23,6 +23,9 @@ def changeres(path):
     zarchive = zipfile.ZipFile(path)
     cache.clear()
     with zarchive.open("colors.json",'r') as f:
-        colordic = json.loads(f.read())
+        try:
+            colordic = json.loads(f.read().decode())
+        except:
+            colordic = json.loads(f.read())
 
 changeres("resource.zip")
