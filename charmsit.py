@@ -6,7 +6,7 @@ through tkinter is not good at making gui with animation and handling touching
 events, i made it more useful.
 it's smooth, perhaps because tkinter is light..
 """
-VERSION = "0.0.1.1-8"
+VERSION = "0.0.1.1-9"
 import tkinter as tk
 import time
 import json
@@ -14,6 +14,7 @@ import pynput
 import os
 import sys
 import getpass
+import re
 import threading
 from PIL import Image, ImageTk
 try:
@@ -26,8 +27,8 @@ except:
     CANICON = 0
 
 import getim
-import mss as msslib
-mss = msslib.mss()
+#import mss as msslib
+#mss = msslib.mss()
 import math
 
 import platform
@@ -39,7 +40,10 @@ SEC1 = 1000
 
 APPS_WIN_USR = r"C:\Users\%s\AppData\Roaming\Microsoft\Windows\Start Menu\Programs"
 APPS_WIN_ALL = r"C:\ProgramData\Microsoft\Windows\Start Menu\Programs"
-#print(os.listdir(PRO_WIN_USR%getpass.getuser()))
+APPS_WIN_UWP = r"C:\Program Files\WindowsApps"
+UWP_MATCH = re.compile("(?P<a>\D*)_\d*.\d*.\d*.\d*_\w\w\w__(?P<b>\w*)")
+UWP_APPID_MATCH = re.compile('<Application Id="(?P<a>\w*)"')
+UWP_ICONPATH_MATCH = re.compile('<Logo>(?P<a>\S+)</Logo>')
 
 ANI_DUR = 1 # 1/1000 ms per frame
 # FPS: 24 30 45 60 90 120 INF
@@ -84,12 +88,6 @@ def animate6(start,end,duration,passed):
 def animate7(start,end,duration,passed):
     x = passed / duration
     return start+(end-start)*(1-(1-x)**5)
-def _animate(start,end,duration,passed):
-    x = passed / duration
-    #return start+(end-start)*(x**3 - 0.3*x*math.sin(x*3.14))
-    return start+(end-start)*(3*math.sin(x-5.7)-2)
-    #return start+(end-start)*(math.sqrt(x**4))
-    #return start+(end-start)*(math.sin(x*3.14/2))
 animate = animate2
 def color(name):
     #return {"bg-normal":"#6400E6","bg-entered":"black","bg-pressed":"grey"}.get(name)
@@ -102,7 +100,7 @@ def lang(key,default=None):
 def config(key,default=None):
     return confdic.get(key,default if default is not None else key.split('.')[-1])
 
-def get_all_apps():
+def get_all_apps_win():
     lst = set()
     for path,dirs,files in os.walk(APPS_WIN_USR):
         for f in files:
@@ -114,7 +112,64 @@ def get_all_apps():
             if f.endswith(".lnk"):
                 lst.add((f[:-4],os.path.join(path,f)))
 
-    return sorted(list(lst))
+    res = []
+    environ = dict(os.environ).items()
+    for name, file in list(lst):
+        path, args = getlnkfrom.get_lnk_file(file)
+        #args = args or ''
+        for k, v in environ:
+            path = path.replace("%%%s%%"%k, v)
+        if not os.path.exists(path):
+            continue
+        command = lambda file=file: os.startfile(file)
+        res.append((name,path,command))
+
+    global APPS_WIN_UWP, UWP_APPID_MATCH, UWP_ICONPATH_MATCH
+    APPS_WIN_UWP = APPS_WIN_UWP
+    UWP_APPID_MATCH = UWP_APPID_MATCH
+    UWP_ICONPATH_MATCH = UWP_ICONPATH_MATCH
+
+    if not os.path.exists(APPS_WIN_UWP):
+        APPS_WIN_UWP = '' # win7 and lower, the current dir have no uwp appx so nothing
+    # below tested in Windows11 Enterprise 23H2 (22631.2050)
+    for fold in os.listdir(APPS_WIN_UWP):
+        # get all apps fold like xxx.xxx_000.0.0.0_xxx__xxxx
+        # get the uwp apps
+        match = UWP_MATCH.search(fold)
+        if match is None:
+            continue
+
+        groups = match.groups()
+        if not all(groups):
+            continue
+
+        # open the appxmanifest.xml
+        # and get the appid and icon path
+        with open(APPS_WIN_UWP+'\\'+fold+"\\AppxManifest.xml",'r',encoding='latin-1') as f:
+            data = f.read()
+        appid = UWP_APPID_MATCH.search(data)
+        if appid is None:
+            continue
+        iconpath = UWP_ICONPATH_MATCH.search(data)
+        if iconpath is None:
+            continue
+
+        appid = appid.groups()[0]
+        command = lambda a=groups[0],b=groups[1],c=appid:os.popen("explorer shell:AppsFolder\\%s_%s!%s"%(a,b,c)) and None # return None
+        img = APPS_WIN_UWP+'\\'+fold+"\\" + iconpath.groups()[0]
+        if not os.path.exists(img):
+            img = img.replace(".png",".scale-200.png")
+            # some icons are not there so change to another iconfile.
+
+        res.append((groups[0].split('.')[-1],img,command))
+
+    return sorted(res,key=lambda l:l[0]) # sorted by name
+
+def get_all_apps():
+    if SYSTEM == "Windows":
+        return get_all_apps_win()
+    else:
+        return [("Not supported :(",'',lambda:None)]
 
 class AnimateManager:
     def __init__(self,widget,duration,start,end,before,during,after,aftertime=0):
@@ -132,7 +187,7 @@ class AnimateManager:
         if not hasattr(widget,"animate"):
             widget.animate = 0
         self.func = animate
-        self.func_extra = []
+        #self.func_extra = []
         self._stopped = 0
         self.framesnum = 0
     def start_animate(self):
@@ -154,6 +209,7 @@ class AnimateManager:
         else:
             self.during(self.end)
             self.after()
+    """# not used :(
     def loop(self):
         " the loop of animation "
         if self._stopped:
@@ -175,6 +231,7 @@ class AnimateManager:
         self.during(var)
         #if not self._stopped:
         widget.after(ANI_DUR,self.loop)
+    """
     def loop(self):
         " the loop of animation "
         " Closure brings an increase of 10~30 fps in inf fps mode. "
@@ -186,7 +243,7 @@ class AnimateManager:
         end = self.end
         func = self.func
         duration = self.duration
-        func_extra = self.func_extra
+        #func_extra = self.func_extra
         after = widget.after
         def loopwork():
             if self._stopped:
@@ -203,11 +260,11 @@ class AnimateManager:
                 #print(self.framesnum/passed,file=open("testfps.txt",'w+'))
                 return
             self.framesnum += 1
-            var = func(start,end,duration,passed,*func_extra)
+            var = func(start,end,duration,passed)
             during(var)
             after(ANI_DUR,loopwork)
         loopwork()
-
+    """# not used :( slow!
     def loop0(self):
         " the loop of animation "
         " No,LEGB is helpful, but generator is helpless(in fps) "
@@ -249,7 +306,7 @@ class AnimateManager:
                 return
             after(ANI_DUR,loopwork,gen)
         loopwork(gen)
-    del loop0
+    """
     
     def stop(self):
         self._stopped = 1
@@ -283,6 +340,12 @@ class Button(tk.Label):
             command()
     def _leave(self,e):
         self["bg"] = color("bg-normal")
+
+    def __setitem__(self,k,v):
+        if k == "command":
+            self._command = v
+        else:
+            super().__setitem__(k,v)
 
 #########################################
 ## ABOVE COPIED FROM MY OTHER PROJECTS ##
@@ -395,11 +458,11 @@ class Charmspopframe(tk.Frame):
             swidth = self.winfo_screenwidth()
             sheight = self.winfo_screenheight()
             width = self.master.width
-            self.btnwin.place(x=width/2,y=sheight/2,width=120,height=120,anchor='center')
-            self.btnsch.place(x=width/2,y=sheight/2-240,width=120,height=120,anchor='center')
-            self.btnshr.place(x=width/2,y=sheight/2-120,width=120,height=120,anchor='center')
-            self.btnlch.place(x=width/2,y=sheight/2+120,width=120,height=120,anchor='center')
-            self.btnset.place(x=width/2,y=sheight/2+240,width=120,height=120,anchor='center')
+            self.btnwin.place(x=width/2,y=sheight/2,width=swidth,height=120,anchor='center')
+            self.btnsch.place(x=width/2,y=sheight/2-240,width=swidth,height=120,anchor='center')
+            self.btnshr.place(x=width/2,y=sheight/2-120,width=swidth,height=120,anchor='center')
+            self.btnlch.place(x=width/2,y=sheight/2+120,width=swidth,height=120,anchor='center')
+            self.btnset.place(x=width/2,y=sheight/2+240,width=swidth,height=120,anchor='center')
         # forget before appearance
         self.btnsch.place_forget()
         self.btnshr.place_forget()
@@ -424,11 +487,11 @@ class Charmspopframe(tk.Frame):
         am = AnimateManager(self.btnset,0.3,width*1.5,width/2,lambda:None,during(self.btnset,240),lambda:None)
         self.after(600,am.start_animate)
         """
-        place_animate(self.btnwin,0.1,width*1.5,width/2,sheight/2,sheight/2,wait=200,kw={"width":120,"height":120,"anchor":"center"})
-        place_animate(self.btnsch,0.15,width*1.5,width/2,sheight/2-240,sheight/2-240,wait=340,kw={"width":120,"height":120,"anchor":"center"})
-        place_animate(self.btnshr,0.12,width*1.5,width/2,sheight/2-120,sheight/2-120,wait=280,kw={"width":120,"height":120,"anchor":"center"})
-        place_animate(self.btnlch,0.12,width*1.5,width/2,sheight/2+120,sheight/2+120,wait=280,kw={"width":120,"height":120,"anchor":"center"})
-        place_animate(self.btnset,0.15,width*1.5,width/2,sheight/2+240,sheight/2+240,wait=340,kw={"width":120,"height":120,"anchor":"center"})
+        place_animate(self.btnwin,0.1,width*1.5,width/2,sheight/2,sheight/2,wait=200,kw={"width":swidth,"height":120,"anchor":"center"})
+        place_animate(self.btnsch,0.15,width*1.5,width/2,sheight/2-240,sheight/2-240,wait=340,kw={"width":swidth,"height":120,"anchor":"center"})
+        place_animate(self.btnshr,0.12,width*1.5,width/2,sheight/2-120,sheight/2-120,wait=280,kw={"width":swidth,"height":120,"anchor":"center"})
+        place_animate(self.btnlch,0.12,width*1.5,width/2,sheight/2+120,sheight/2+120,wait=280,kw={"width":swidth,"height":120,"anchor":"center"})
+        place_animate(self.btnset,0.15,width*1.5,width/2,sheight/2+240,sheight/2+240,wait=340,kw={"width":swidth,"height":120,"anchor":"center"})
         #"""
         # handle after
         self.after(700,after)
@@ -465,7 +528,8 @@ class Launcherframe(tk.Frame):
         self.btns = []
         self.stopanimate = lambda:None
         self.mouse = (0,0)
-        self.fill()
+        self.look = 0
+        #self.fill()
 
     def _mwhup(self,e):
         if showing != self.master:
@@ -492,8 +556,10 @@ class Launcherframe(tk.Frame):
         info = btnframe.place_info()
         if int(info["y"]) > 0:
             place_animate(btnframe,0.2,0,0,int(info["y"]),0)
-        elif int(info["y"]) < 140-self.winfo_screenheight():
-            place_animate(btnframe,0.2,0,0,int(info["y"]),140-self.winfo_screenheight())
+        #elif int(info["y"]) < 140-self.winfo_screenheight():
+        #    place_animate(btnframe,0.2,0,0,int(info["y"]),140-self.winfo_screenheight())
+        elif int(info["y"])+int(info["height"]) < self.winfo_screenheight()/2:
+            self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),self.winfo_screenheight()/2-int(info["height"]))
 
     def _mwh(self,e):
         if showing != self.master:
@@ -506,12 +572,16 @@ class Launcherframe(tk.Frame):
         info = btnframe.place_info()
         btnframe.place(y=int(info["y"])-delta*10,height=len(self.btns)*80)
         info = btnframe.place_info()
+        def0 = lambda a: a if a<=0 else 0
         if int(info["y"]) > 0:
             #self.stopanimate()
             self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),0)
-        elif int(info["y"]) < 140-self.winfo_screenheight():
+        elif int(info["y"])+int(info["height"]) < self.winfo_screenheight()/2:
             #self.stopanimate()
-            self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),140-self.winfo_screenheight())
+            self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),def0(self.winfo_screenheight()/2-int(info["height"])))
+        #elif int(info["y"]) < 140-self.winfo_screenheight():
+        #    #self.stopanimate()
+        #    self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),140-self.winfo_screenheight())
 
     def _b1p(self,e):
         self.mouse = (e.x, e.y)
@@ -519,6 +589,20 @@ class Launcherframe(tk.Frame):
     def _b1r(self,e):
         for btn in self.btns:
             btn._executable = 1
+        """ # *1
+        info = self.btnframe.place_info()
+        if self.look:
+            #self.stopanimate = place_animate(self.btnframe,1,0,0,int(info["y"]),int(info['y'])+self.look*100)
+            def during(var):
+                nonlocal y
+                info = self.btnframe.place_info()
+                self.btnframe.place(x=0,y=int(info['y'])+(var-y)*self.look)
+                y = var
+            y = 0
+            am = AnimateManager(self.btnframe,1,1,100,lambda:None,during,lambda:None)
+            am.start_animate()
+        """
+        # *1&*2&*3 : 'touch' experience, developing, hided
 
     def _mofm(self,e):
         if showing != self.master:
@@ -531,14 +615,29 @@ class Launcherframe(tk.Frame):
             return
         for btn in self.btns:
             btn._executable = 0
+
+        #self.stopanimate()
         info = self.btnframe.place_info()
-        if int(info["y"])-(oy-y) > 0:
+
+        if (oy-y)*1.4 > 0:
+            # up
+            self.look = -1
+        else:
+            # down
+            self.look = 1
+
+        if int(info["y"]) > 0:
             #self.btnframe.place(y=0)
+            #self.stopanimate = place_animate(self.btnframe,0.2,0,0,int(info["y"]),0) # *2
+            self.look = 0
             return
-        elif int(info["y"])-(oy-y) < 140-self.winfo_screenheight():
+        elif int(info["y"])+int(info["height"]) < self.winfo_screenheight()/2:
+            def0 = lambda a: a if a<=0 else 0
+            #self.stopanimate = place_animate(self.btnframe,0.2,0,0,int(info["y"]),def0(self.winfo_screenheight()/2-int(info["height"]))) # *3
+            self.look = 0
             return
             #self.btnframe.place(y=140-self.winfo_screenheight())
-        self.btnframe.place(y=int(info["y"])-(oy-y),height=len(self.btns)*80)
+        self.btnframe.place(y=int(info["y"])-(oy-y)*1.4,height=len(self.btns)*80)
 
     def fill(self):
         for w in self.btns:
@@ -547,13 +646,34 @@ class Launcherframe(tk.Frame):
         idx = 0
         for name, path in get_all_apps():
             if not path.endswith(".lnk"):
+                #print("not lnk,passed  ",path )
                 continue
-            if not getlnkfrom.get_lnk_file(path).endswith(".exe"):
+            if not ".exe" in getlnkfrom.get_lnk_file(path):
+                print("not exe,passed  ",getlnkfrom.get_lnk_file(path) )
+                #print("not exe,passed  ",path)
                 continue
-            if not os.path.exists(getlnkfrom.get_lnk_file(path)):
-                continue
+            #if not os.path.exists(getlnkfrom.get_lnk_file(path)):
+            #    #print("not zai,passed  ",getlnkfrom.get_lnk_file(path) )
+            #    continue
             btn = Button(self.btnframe,text=name,compound="left",font="Simhei 32",anchor='w',padx=20)
-            btn._command = lambda path=path,self=self:(os.startfile(getlnkfrom.get_lnk_file(path)) or self.master.master.disappear())
+            btn["command"] = lambda path=path,self=self:(os.startfile(getlnkfrom.get_lnk_file(path)) or self.master.disappear() or self.master.master.disappear())
+            #btn.place(x=40,y=100+idx*80,height=80,width=self.master.width-80)
+            btn.place(x=0,y=idx*80,height=80,width=self.lw)
+            btn.path = path
+            btn.y = idx*80
+            btn.stop = lambda:None
+            self.btns.append(btn)
+            idx += 1
+        threading.Thread(target=self.geticons,daemon=1).start()
+
+    def fill(self):
+        for w in self.btns:
+            w.destory()
+        self.btns.clear()
+        idx = 0
+        for name, path, command in get_all_apps():
+            btn = Button(self.btnframe,text=name,compound="left",font="Simhei 32",anchor='w',padx=20)
+            btn["command"] = lambda path=path,self=self, command=command:(command() or self.master.disappear() or self.master.master.disappear())
             #btn.place(x=40,y=100+idx*80,height=80,width=self.master.width-80)
             btn.place(x=0,y=idx*80,height=80,width=self.lw)
             btn.path = path
@@ -569,15 +689,22 @@ class Launcherframe(tk.Frame):
             return
         for btn in self.btns:
             path = btn.path
-            path = getlnkfrom.get_lnk_file(path)
-            try:
-                rgb = geticon.rgb(geticon.get_raw_data(path,0,32),32,32)
-            except Exception as e:
-                continue
-            im = Image.new("RGB",(32,32))
-            im.frombytes(rgb)
+            #path = getlnkfrom.get_lnk_file(path)[0]
+            if path.endswith(".exe"):
+                try:
+                    rgb = geticon.rgb(geticon.get_raw_data(path,0,32),32,32)
+                    im = Image.new("RGB",(32,32))
+                    im.frombytes(rgb)
+                except Exception as e:
+                    #print(e,path)
+                    #continue
+                    im = Image.new("RGBA",(32,32))
+            elif path.endswith(".png"):
+                try:
+                    im = Image.open(path).resize((32,32))
+                except:
+                    continue
             imt = ImageTk.PhotoImage(im)
-            #btn.im = im
             btn.imt = imt
             btn["image"] = imt
 
@@ -599,7 +726,7 @@ class Launcherframe(tk.Frame):
             btn.stop()
             btn.place_forget()
             if 0-240 <= btn.y+80+int(info['y']) <= int(info["height"])+80+240:
-                btn.stop = place_animate(btn,0.2 if t else 0.4,self.lw,0,btn.y,btn.y,t,aniwait*20,kw={"width":self.lw,"height":80})
+                btn.stop = place_animate(btn,0.3 if t else 0.6,self.lw,0,btn.y,btn.y,t,aniwait*20,kw={"width":self.lw,"height":80})
                 aniwait += 1
             else:
                 btn.place(x=0,y=btn.y,width=self.lw,height=80)
@@ -615,6 +742,7 @@ class Settingsframe(tk.Frame):
         self.titlel.place(x=80,y=20)
         self.exitbtn = Button(self,text=lang("settings.exit"),font="Simhei 24",bg=color("bg-normal"),fg=color("fg-normal"),command=lambda:root.destroy()or sys.exit)
         self.exitbtn.place(x=460,y=20,anchor='ne')
+        #self.exitbtn._command = self.master.appear # a test
         
 
     def appear(self):
@@ -628,7 +756,7 @@ class Settingsframe(tk.Frame):
     def _change(self,t=False):
         place_animate(self.back,0.6,20+self.master.width,20,20,20,t)
         place_animate(self.titlel,0.7,80+self.master.width,80,20,20,t)
-        place_animate(self.exitbtn,0.8,80+self.master.width+460,460,20,20,t)
+        place_animate(self.exitbtn,0.8,80+self.master.width+460,self.master.width-20,20,20,t)
         wait = 1
         """
         for btn in self.btns:
@@ -649,6 +777,7 @@ class Searchframe(tk.Frame):
         self.entry = tk.Entry(self,relief="flat",bd=2,bg=color("bge-normal"),highlightcolor="grey",font="Simhei 24")
         #print(self.entry.config())
         self.entry.place(x=20,y=80,width=self.master.width-40)
+        tk.Label(self,text="Too hard. try it latttttter.",bg=color("bg-normal"),fg=color("fg-normal"),font="Simhei 24").place(x=20,y=120)
 
     def appear(self):
         #if not self.btns:
@@ -661,6 +790,7 @@ class Searchframe(tk.Frame):
     def _change(self,t=False):
         place_animate(self.back,0.6,20+self.master.width,20,20,20,t)
         place_animate(self.titlel,0.7,80+self.master.width,80,20,20,t)
+        place_animate(self.entry,0.6,self.master.width-20,20,80,80,t)
         wait = 1
         """
         for btn in self.btns:
@@ -695,8 +825,8 @@ class Toolsframe(tk.Frame):
         no = lambda:None
         lst = (("tools.shot","shot.png",no),("tools.clipman","clipman.png",no),("tools.note","note.png",self.note),("tools.clock","clock.png",no),("tools.filetmp","filetmp.png",no),("tools.mkcolor","mkcolor.png",no),("tools.numcovert","numcovert.png",no))
         for langkey, img, command in lst:
-            btn = Button(self.btnframe,text=lang(langkey),image=getim.get(img),compound="left",font="Simhei 32",anchor='w',padx=20)
-            btn._command = command
+            btn = Button(self.btnframe,text=lang(langkey),image=getim.get(img),compound="left",font="Simhei 32",anchor='w',padx=20,command=command)
+            #btn._command = command
             btn.place(x=0,y=idx*80,height=80,width=self.lw)
             btn.y = idx*80
             btn.stop = lambda:None
@@ -743,10 +873,13 @@ class Toolsframe(tk.Frame):
         info = btnframe.place_info()
         btnframe.place(y=int(info["y"])-delta*10,height=len(self.btns)*80)
         info = btnframe.place_info()
+        def0 = lambda a: a if a<=0 else 0
         if int(info["y"]) > 0:
             self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),0)
-        elif int(info["y"]) < 140-self.winfo_screenheight():
-            self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),140-self.winfo_screenheight())
+        #elif int(info["y"]) < 140-self.winfo_screenheight():
+        #    self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),140-self.winfo_screenheight())
+        elif int(info["y"])+int(info["height"]) < self.winfo_screenheight()/2:
+            self.stopanimate = place_animate(btnframe,0.2,0,0,int(info["y"]),def0(self.winfo_screenheight()/2-int(info["height"])))
 
     def _b1p(self,e):
         self.mouse = (e.x, e.y)
@@ -799,7 +932,7 @@ class Toolsframe(tk.Frame):
         for btn in reversed(self.btns):
             #btn.place_forget()
             btn.stop()
-            btn.stop = place_animate(btn,0.2 if t else 0.4,self.lw,0,btn.y,btn.y,t,wait*30,kw={"width":self.lw,"height":80})
+            btn.stop = place_animate(btn,0.3 if t else 0.6,self.lw,0,btn.y,btn.y,t,wait*30,kw={"width":self.lw,"height":80})
             wait += 1
     def takeshot(self):
         pass
@@ -815,6 +948,10 @@ class Subframe(tk.Frame):
         self.back.place(x=20,y=20)
         self.titlel = tk.Label(self,text=lang(self.LANG),font="Simhei 24",bg=color("bg-normal"),fg=color("fg-normal"))
         self.titlel.place(x=80,y=20)
+        self._init()
+
+    def _init(self):
+        pass
 
     def _appear(self):
         pass
@@ -850,6 +987,9 @@ class Subframe(tk.Frame):
 
 class Noteframe(Subframe):
     LANG = "tools.note"
+    def _init(self):
+        #self.
+        pass
 
 class Basicwin(tk.Toplevel):
     width = 480
@@ -955,7 +1095,8 @@ class Popinvokewin(tk.Toplevel):
         if e.x < -20:
             pop.popup()
 
-def checkpopup():
+def checkpopup1():
+    " not good:( place your pointers to the right 30px of screen for 1 sec. "
     swidth = root.winfo_screenwidth()
     sheight = root.winfo_screenheight()
     mx,my = root.winfo_pointerxy()
@@ -971,13 +1112,44 @@ def checkpopup():
                 pop.popup()
                 root.clock = 16
     root.now = time.time()
-    root.after(100,checkpopup)
+    root.after(300,checkpopup1)
+
+def checkpopup2():
+    " similar to win8 -- but with bug:) "
+    swidth = root.winfo_screenwidth()
+    sheight = root.winfo_screenheight()
+    mx,my = root.winfo_pointerxy()
+    if swidth-mx > 30:
+        root.clock = 16
+    elif not pop.poped:
+        #print(mx,my)
+        if root.clock==16 and mx+1==swidth and (my==0 or my==sheight-1):
+            root.clock = 1
+            root.my = my
+        elif mx+1!=swidth:
+            root.my = -sheight*2
+        else:
+            root.clock -= time.time()-root.now
+            if root.clock >= 0 and mx+1==swidth and abs(my-root.my)*3>=swidth:
+                pop.popup()
+                root.clock = 16
+            elif root.clock<0 or mx+1!=swidth:
+                root.my = -sheight*2
+    root.now = time.time()
+    root.after(100,checkpopup2)
+
+checkpopup = checkpopup1
 
 def place_animate(wid,t,xs,xe,ys,ye,reverse=False,wait=0,kw=None):
     if not kw:
         kw = {}
+    # legb
+    xe = xe
+    ye = ye
+    xx = xe-xs
+    yy = ye-ys
     def during(var):
-        wid.place(x=(xe-xs)*var+xs,y=(ye-ys)*var+ys,**kw)
+        wid.place(x=xx*var+xs,y=yy*var+ys,**kw)
     def after():
         wid.place(x=xe,y=ye,**kw)
     am = AnimateManager(wid,t,0,1,lambda:None,during,after,aftertime=wait)
@@ -1024,6 +1196,7 @@ if __name__ == "__main__":
 
     root.now = time.time()
     root.clock = 0
+    root.my = -2 * root.winfo_screenheight()
     pop = Charmspop()
     pop.withdraw()
     pop.overrideredirect(1)
@@ -1032,7 +1205,7 @@ if __name__ == "__main__":
     showing = pop
     checkpopup()
     #pop.popup()
-    pop.disappear()
+    #pop.disappear()
     #Popinvokewin()
     #root.after(0,pop.popup())
     root.mainloop()
