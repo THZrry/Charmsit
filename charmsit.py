@@ -5,8 +5,10 @@ even posix systems!
 through tkinter is not good at making gui with animation and handling touching
 events, i made it more useful.
 it's smooth, perhaps because tkinter is light..
+
+oh, shit code
 """
-VERSION = "0.0.1.2"
+VERSION = "0.0.1.2-1"
 import tkinter as tk
 import time
 import json
@@ -103,7 +105,7 @@ def config(key,default=None):
 
 def get_all_apps_win():
     lst = set()
-    for path,dirs,files in os.walk(APPS_WIN_USR):
+    for path,dirs,files in os.walk(APPS_WIN_USR%getpass.getuser()):
         for f in files:
             if f.endswith(".lnk"):
                 lst.add((f[:-4],os.path.join(path,f)))
@@ -114,16 +116,21 @@ def get_all_apps_win():
                 lst.add((f[:-4],os.path.join(path,f)))
 
     res = []
+    names = set()
     environ = dict(os.environ).items()
-    for name, file in list(lst):
+    for name, file in lst:
         path, args = getlnkfrom.get_lnk_file(file)
         #args = args or ''
+        if name in names:
+            continue
+        names.add(name)
         for k, v in environ:
             path = path.replace("%%%s%%"%k, v)
         if not os.path.exists(path):
             continue
         command = lambda file=file: os.startfile(file)
         res.append((name,path,command))
+    del lst, names
 
     global APPS_WIN_UWP, UWP_APPID_MATCH, UWP_ICONPATH_MATCH
     APPS_WIN_UWP = APPS_WIN_UWP
@@ -131,10 +138,16 @@ def get_all_apps_win():
     UWP_ICONPATH_MATCH = UWP_ICONPATH_MATCH
 
     # need andimistator
-    if not os.path.exists(APPS_WIN_UWP):
-        APPS_WIN_UWP = '.' # win7 and lower, the current dir have no uwp appx so nothing
+    try:
+        if not os.path.exists(APPS_WIN_UWP):
+            APPS_WIN_UWP = '.' # win7 and lower, the current dir have no uwp appx so nothing
+    except:
+        res.append((lang("launch.nopremission"),'',lambda:None))
+        return sorted(res,key=lambda l:l[0]) # sorted by name
+
     # below tested in Windows11 Enterprise 23H2 (22631.2050)
     # and another test took on a windows10 21h2 device and it works.
+    # moreover, a test on win8.1 9600 passed too
     for fold in os.listdir(APPS_WIN_UWP):
         # get all apps fold like xxx.xxx_000.0.0.0_xxx__xxxx
         # get the uwp apps
@@ -146,7 +159,7 @@ def get_all_apps_win():
         if not all(groups):
             continue
 
-        # open the appxmanifest.xml
+        # open the AppxManifest.xml
         # and get the appid and icon path
         with open(APPS_WIN_UWP+'\\'+fold+"\\AppxManifest.xml",'r',encoding='latin-1') as f:
             data = f.read()
@@ -158,7 +171,8 @@ def get_all_apps_win():
             continue
 
         appid = appid.groups()[0]
-        command = lambda a=groups[0],b=groups[1],c=appid:os.popen("explorer.exe shell:AppsFolder\\%s_%s!%s"%(a,b,c)) and None # return None
+        string = "explorer.exe shell:AppsFolder\\%s_%s!%s"%(groups[0], groups[1], appid)
+        command = lambda string=string:os.popen(string) and None # return None
         img = APPS_WIN_UWP+'\\'+fold+"\\" + iconpath.groups()[0]
         if not os.path.exists(img):
             img = img.replace(".png",".scale-200.png")
@@ -169,8 +183,8 @@ def get_all_apps_win():
     return sorted(res,key=lambda l:l[0]) # sorted by name
 
 def get_all_apps_mac():
-    for app in os.listdir('/applications'):
-        pass
+    #for app in os.listdir('~/applications'):
+    #    pass
     return [("Not supported :(",'',lambda:None), ("Too expensive :(",'',lambda:None)]
 
 def get_all_apps():
@@ -361,7 +375,7 @@ class Button(tk.Label):
 #########################################
 ## ABOVE COPIED FROM MY OTHER PROJECTS ##
 #########################################
-        
+
 class Charmspop(tk.Toplevel):
     width = 120
     def __init__(self,master=None,*a,**b):
@@ -663,33 +677,6 @@ class Launcherframe(tk.Frame):
             w.destory()
         self.btns.clear()
         idx = 0
-        for name, path in get_all_apps():
-            if not path.endswith(".lnk"):
-                #print("not lnk,passed  ",path )
-                continue
-            if not ".exe" in getlnkfrom.get_lnk_file(path):
-                print("not exe,passed  ",getlnkfrom.get_lnk_file(path) )
-                #print("not exe,passed  ",path)
-                continue
-            #if not os.path.exists(getlnkfrom.get_lnk_file(path)):
-            #    #print("not zai,passed  ",getlnkfrom.get_lnk_file(path) )
-            #    continue
-            btn = Button(self.btnframe,text=name,compound="left",font="Simhei 32",anchor='w',padx=20)
-            btn["command"] = lambda path=path,self=self:(os.startfile(getlnkfrom.get_lnk_file(path)) or self.master.disappear() or self.master.master.disappear())
-            #btn.place(x=40,y=100+idx*80,height=80,width=self.master.width-80)
-            btn.place(x=0,y=idx*80,height=80,width=self.lw)
-            btn.path = path
-            btn.y = idx*80
-            btn.stop = lambda:None
-            self.btns.append(btn)
-            idx += 1
-        threading.Thread(target=self.geticons,daemon=1).start()
-
-    def fill(self):
-        for w in self.btns:
-            w.destory()
-        self.btns.clear()
-        idx = 0
         btnframe = self.btnframe
         for name, path, command in get_all_apps():
             btn = Button(btnframe,text=name,compound="left",font="Simhei 32",anchor='w',padx=20)
@@ -701,17 +688,16 @@ class Launcherframe(tk.Frame):
             btn.stop = lambda:None
             self.btns.append(btn)
             idx += 1
-        threading.Thread(target=self.geticons,daemon=1).start()
+        threading.Thread(target=self.puticons,daemon=1).start()
         self.progress.place(width=(self.winfo_screenheight()-140)/idx/80*self.master.width,height=2,y=self.winfo_screenheight()-2)
         #self.progressinvoke()
 
-    def geticons(self,):
+    def puticons(self,):
         #print(CANICON)
         if not CANICON:
             return
         for btn in self.btns:
             path = btn.path
-            #path = getlnkfrom.get_lnk_file(path)[0]
             if path.endswith(".exe"):
                 try:
                     rgb = geticon.rgb(geticon.get_raw_data(path,0,32),32,32)
@@ -726,6 +712,8 @@ class Launcherframe(tk.Frame):
                     im = Image.open(path).resize((32,32))
                 except:
                     continue
+            else:
+                im = Image.new("RGBA",(32,32))
             imt = ImageTk.PhotoImage(im)
             btn.imt = imt
             btn["image"] = imt
@@ -751,10 +739,11 @@ class Launcherframe(tk.Frame):
         bh = int(info["height"])
         lw = self.lw
         tm = 0.3 if t else 0.6
+        fh = self.frame.winfo_height()
         for btn in self.btns:
             btn.stop()
             btn.place_forget()
-            if -80 <= btn.y+y <= bh:
+            if -80 <= btn.y+y <= fh:
                 btn.stop = place_animate(btn,tm,lw,0,btn.y,btn.y,t,aniwait,kw={"width":lw,"height":80})
                 aniwait += 20
             else:
@@ -994,10 +983,11 @@ class Toolsframe(tk.Frame):
         bh = int(info["height"])
         lw = self.lw
         tm = 0.3 if t else 0.6
+        fh = self.frame.winfo_height()
         for btn in self.btns:
             btn.stop()
             btn.place_forget()
-            if -80 <= btn.y+y <= bh:
+            if -80 <= btn.y+y <= fh:
                 btn.stop = place_animate(btn,tm,lw,0,btn.y,btn.y,t,aniwait,kw={"width":lw,"height":80})
                 aniwait += 20
             else:
@@ -1213,7 +1203,7 @@ checkpopup = checkpopup1
 def place_animate(wid,t,xs,xe,ys,ye,reverse=False,wait=0,kw=None):
     if not kw:
         kw = {}
-    # legb
+    # LEGB
     xe = xe
     ye = ye
     xx = xe-xs
@@ -1229,16 +1219,21 @@ def place_animate(wid,t,xs,xe,ys,ye,reverse=False,wait=0,kw=None):
     return am.stop
 
 if __name__ == "__main__":
+    moreover = ""
     try:
         with open("config.json",'r') as f:
             confdic = json.loads(f.read())
     except:
         confdic = {}
+        moreover += "config file "
     try:
         with open("lang/%s.json"%(config("main.language","en-us")),'r') as f:
             langdic = json.loads(f.read())
     except:
         langdic = {}
+        moreover += "language file "
+    if moreover:
+        moreover += "broken!"
     colordic = getim.colordic
     ANI_DUR = int(1000 / (config("main.fps",30)or 30)) - 2
     if ANI_DUR <= 0:
@@ -1252,6 +1247,7 @@ if __name__ == "__main__":
         charmsit.geometry("300x160+%d+%d"%((root.winfo_screenwidth()-300)//2,(root.winfo_screenheight()-160)//2))
         tk.Label(charmsit,text="CharmsIt",font="Simsun 48",bg=color("bg-normal"),fg=color("fg-normal")).place(x=150,y=80,anchor="center",width=300,height=160)
         tk.Label(charmsit,text=VERSION,font="Simsun 20",bg=color("bg-normal"),fg=color("fg-normal")).place(x=280,y=120,anchor='e')
+        tk.Label(charmsit,text=moreover,font="Simsun 8",bg=color("bg-normal"),fg=color("fg-normal")).place(x=0,rely=1,anchor='sw')
         charmsit.attributes("-alpha",0,"-topmost",1)
         for i in range(0,10,1):
             #charmsit.attributes("-alpha",i/10)
@@ -1265,7 +1261,7 @@ if __name__ == "__main__":
             charmsit.update()
             time.sleep(0.03*ALLOWANIMATION)
         charmsit.destroy()
-        del charmsit
+        del charmsit, moreover
 
     root.now = time.time()
     root.clock = 0
