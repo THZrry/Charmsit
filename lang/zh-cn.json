@@ -27,6 +27,7 @@
 	"tools.numcovert":"数字转换",
 	
 	"launch.title":"应用",
+	"launch.nopremission":"权限不足，UWP应用无法获取",
 	
 	"settings.title":"设置",
 	"settings.exit":"退出CharmsIt"
