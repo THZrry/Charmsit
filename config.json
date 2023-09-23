@@ -1,6 +1,6 @@
 {
 	"main.launchscreen": true,
 	"main.language":"zh-cn",
-	"main.fps":800,
+	"main.fps":60,
 	"main.animation":true
 }

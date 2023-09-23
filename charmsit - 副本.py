@@ -119,7 +119,10 @@ def get_all_apps_win():
     names = set()
     environ = dict(os.environ).items()
     for name, file in lst:
-        path, args = getlnkfrom.get_lnk_file(file)
+        try:
+            path, args = getlnkfrom.get_lnk_file(file)
+        except:
+            continue
         #args = args or ''
         if name in names:
             continue
@@ -175,7 +178,8 @@ def get_all_apps_win():
         command = lambda string=string:os.popen(string) and None # return None
         img = APPS_WIN_UWP+'\\'+fold+"\\" + iconpath.groups()[0]
         if not os.path.exists(img):
-            img = img.replace(".png",".scale-200.png")
+            #img = img.replace(".png",".scale-200.png")
+            img = img.replace(".png",".contrast-black_scale-100.png")
             # some icons are not there so change to another iconfile.
 
         res.append((groups[0].split('.')[-1],img,command))
@@ -726,8 +730,6 @@ class Launcherframe(tk.Frame):
     def appear(self):
         if not self.btns:
             self.fill()
-        self.frame.place(x=40,y=100,width=self.lw,height=self.winfo_screenheight()-140)
-        self.progress.place(width=(self.winfo_screenheight()-140)/len(self.btns)/80*self.master.width,height=2,y=self.winfo_screenheight()-2)
         self._change()
 
     def disappear(self):
